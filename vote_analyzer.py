@@ -1,6 +1,12 @@
 import praw
 import re
+import tkinter as tk
+from tkinter import scrolledtext
 
+# Reddit API credentials (replace with your own credentials)
+REDDIT_CLIENT_ID = 'your_client_id'
+REDDIT_SECRET = 'your_secret'
+REDDIT_USER_AGENT = 'vote_analyzer_bot'
 
 # Fixed player data file (adjust the file path accordingly)
 PLAYER_DATA_FILE = 'players.txt'
@@ -12,22 +18,32 @@ reddit = praw.Reddit(
         user_agent='X'
     )
 
-# Load player-riding data from file
+
 def load_player_data(filename):
     player_data = {}
+    vacant_count = 0  # Define inside the function
+
     with open(filename, 'r') as file:
         for line in file:
-            riding, name = line.strip().split('\t')  # Assuming tab-separated values
-            player_data[name.lower()] = riding
-    return player_data
+            if line.strip() == "" or line.startswith(("Electoral District", "Party List")):
+                continue
+            riding, name, party = line.strip().split('\t')
+            if name.lower() == 'vacant':
+                vacant_count += 1  # Increment vacant count
+            else:
+                player_data[name.lower()] = (riding, party)
+
+    return player_data, vacant_count  # Return both player data and vacant count
+
 
 # Analyze votes in a Reddit post
 def analyze_votes(submission, player_data):
-    votes = {'aye': [], 'nay': [], 'abstain': []}
+    votes = {}
+    all_votes = {}
 
     # Regex patterns for aye, nay, abstain (in English and French)
     aye_pattern = re.compile(r'\b(aye|oui|yea)\b', re.IGNORECASE)
-    nay_pattern = re.compile(r'\b(nay|non)\b', re.IGNORECASE)
+    nay_pattern = re.compile(r'\b(nay|non|contre)\b', re.IGNORECASE)
     abstain_pattern = re.compile(r'\b(abstain|Abstention)\b', re.IGNORECASE)  # Add French word for abstain if known
 
     # Fetch all comments in the post
@@ -41,55 +57,135 @@ def analyze_votes(submission, player_data):
         # Check for 'aye', 'nay', or 'abstain' in comment, case-insensitive
         comment_text = comment.body.lower()
         if aye_pattern.search(comment_text):
-            votes['aye'].append((author, player_data[author]))
+            votes[author] = ('aye', player_data[author][0], player_data[author][1], comment.created_utc)
         elif nay_pattern.search(comment_text):
-            votes['nay'].append((author, player_data[author]))
+            votes[author] = ('nay', player_data[author][0], player_data[author][1], comment.created_utc)
         elif abstain_pattern.search(comment_text):
-            votes['abstain'].append((author, player_data[author]))
+            votes[author] = ('abstain', player_data[author][0], player_data[author][1], comment.created_utc)
 
-    return votes
+        # Store all votes for detailed breakdown
+        all_votes[author] = (comment_text, player_data[author])
 
-# Display vote breakdown
-def display_vote_breakdown(votes):
+    # Filter votes to keep only the newest one for each player
+    final_votes = {}
+    for author, (vote_type, riding, party, timestamp) in votes.items():
+        if author not in final_votes or final_votes[author][3] < timestamp:
+            final_votes[author] = (vote_type, riding, party, timestamp)
+
+    return final_votes, all_votes
+
+
+# Display vote breakdown in the GUI with line highlighting
+def display_vote_breakdown(final_votes, all_votes, player_data,vacant_count):
+    # Clear the text box
+    breakdown_box.config(state=tk.NORMAL)  # Enable editing to insert text
+    breakdown_box.delete(1.0, tk.END)
+
     # Tally the votes
-    tally = {
-        'Aye': len(votes['aye']),
-        'Nay': len(votes['nay']),
-        'Abstain': len(votes['abstain'])
-    }
+    tally = {'Aye': 0, 'Nay': 0, 'Abstain': 0}
+    party_tally = {}
 
-    # Print detailed breakdown
-    print("\nDetailed Breakdown:")
-    for vote_type, voters in votes.items():
-        if voters:
-            print(f"\n{vote_type.capitalize()} Votes:")
-            for voter, riding in voters:
-                print(f"  - {voter.capitalize()} ({riding})")
+    # Detailed Breakdown with Line Highlighting
+    for author, (comment_text, (riding, party)) in all_votes.items():
+        vote_type = final_votes.get(author, [None])[0]
+        line_text = f"({riding})\t{author.capitalize()} [{party}]: {comment_text}\n"
+
+        if vote_type == 'aye':
+            breakdown_box.insert(tk.END, line_text, 'green_bg')
+        elif vote_type == 'nay':
+            breakdown_box.insert(tk.END, line_text, 'red_bg')
+        elif vote_type == 'abstain':
+            breakdown_box.insert(tk.END, line_text, 'yellow_bg')
+
+    # Latest Votes and Tally
+    tally_box.delete(1.0, tk.END)
+    tally_text = "\nTally of Votes:\n"
+
+    for voter, (vote_type, riding, party, _) in final_votes.items():
+        tally[vote_type.capitalize()] += 1
+
+        # Party breakdown
+        if party not in party_tally:
+            party_tally[party] = {'Aye': 0, 'Nay': 0, 'Abstain': 0, 'No Vote': 0}
+        party_tally[party][vote_type.capitalize()] += 1
+
+    # Number of people who haven't voted
+    voted_people = set(final_votes.keys())
+    all_people = set(player_data.keys())
+    not_voted = all_people - voted_people
+
+    for name in not_voted:
+        riding, party = player_data[name]
+        if party not in party_tally:
+            party_tally[party] = {'Aye': 0, 'Nay': 0, 'Abstain': 0, 'No Vote': 1}
         else:
-            print(f"\nNo {vote_type} votes.")
+            party_tally[party]['No Vote'] += 1
 
-    # Print tally of votes
-    print("\nTally of Votes:")
-    print(f"Aye: {tally['Aye']}")
-    print(f"Nay: {tally['Nay']}")
-    print(f"Abstain: {tally['Abstain']}")
+    # Final Tally Output
 
-# Main function
-def main():
-    # Ask the user for the Reddit link
-    reddit_link = input("Please enter the Reddit post link: ")
+    tally_text += f"Aye: {tally['Aye']}\n"
+    tally_text += f"Nay: {tally['Nay']}\n"
+    tally_text += f"Abstain: {tally['Abstain']}\n"
+    tally_text += f"Vacant seats: {vacant_count}\n"  # Add Vacant count to the tally
+
+    # Party breakdown
+    tally_text += "\nParty Breakdown:\n"
+    for party, counts in party_tally.items():
+        tally_text += f"{party}: Aye: {counts['Aye']}, Nay: {counts['Nay']}, Abstain: {counts['Abstain']}, No Vote: {counts['No Vote']}\n"
+
+    tally_text += f"\nNumber of people who haven't voted: {len(not_voted)}\n"
+
+    tally_box.insert(tk.END, tally_text)
+
+    # Make the breakdown read-only after updating it
+    breakdown_box.config(state=tk.DISABLED)
+
+
+# Function to handle the analyze button click
+def analyze_votes_gui():
+    reddit_link = entry_link.get()  # Get the Reddit link from the input box
 
     # Load player data from the fixed player file
-    player_data = load_player_data(PLAYER_DATA_FILE)
+    player_data, vacant_count = load_player_data(PLAYER_DATA_FILE)
 
     # Get the Reddit submission from the link
     submission = reddit.submission(url=reddit_link)
 
     # Analyze votes
-    votes = analyze_votes(submission, player_data)
+    final_votes, all_votes = analyze_votes(submission, player_data)
 
-    # Display the results
-    display_vote_breakdown(votes)
+    # Display the results and tally
+    display_vote_breakdown(final_votes, all_votes, player_data, vacant_count)
 
-if __name__ == "__main__":
-    main()
+
+
+# Create the GUI window
+root = tk.Tk()
+root.title("Reddit Vote Analyzer")
+
+# Link entry
+tk.Label(root, text="Enter Reddit Post Link:").pack(pady=5)
+entry_link = tk.Entry(root, width=50)
+entry_link.pack(pady=5)
+
+# Analyze button
+analyze_button = tk.Button(root, text="Analyze Votes", command=analyze_votes_gui)
+analyze_button.pack(pady=10)
+
+# Breakdown text box (scrollable)
+tk.Label(root, text="Breakdown of All Votes:").pack(pady=5)
+breakdown_box = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=80, height=15)
+breakdown_box.pack(pady=5)
+
+# Tally text box (scrollable)
+tk.Label(root, text="Tally of Votes:").pack(pady=5)
+tally_box = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=60, height=15)
+tally_box.pack(pady=5)
+
+# Text tag configuration for line highlighting
+breakdown_box.tag_configure('green_bg', background='lightgreen', foreground='black')
+breakdown_box.tag_configure('red_bg', background='lightcoral', foreground='black')
+breakdown_box.tag_configure('yellow_bg', background='lightyellow', foreground='black')
+
+# Start the GUI event loop
+root.mainloop()
