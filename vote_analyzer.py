@@ -79,7 +79,7 @@ def display_vote_breakdown(final_votes, all_votes, player_data, vacant_count):
     tally = {'Aye': 0, 'Nay': 0, 'Abstain': 0}
     party_tally = {}
 
-    # Detailed Breakdown with Line Highlighting
+    # Detailed Breakdown with Line Highlighting for those who voted
     for author, (comment_text, (riding, party)) in all_votes.items():
         vote_type = final_votes.get(author, [None])[0]
         line_text = f"({riding})\t{author.capitalize()} [{party}]: {comment_text}\n"
@@ -90,8 +90,10 @@ def display_vote_breakdown(final_votes, all_votes, player_data, vacant_count):
             breakdown_box.insert(tk.END, line_text, 'red_bg')
         elif vote_type == 'abstain':
             breakdown_box.insert(tk.END, line_text, 'yellow_bg')
+        else:
+            breakdown_box.insert(tk.END, f"{line_text.strip()} - No Vote\n", 'no_vote_bg')
 
-    # Latest Votes and Tally
+    # Tally votes from final_votes
     tally_box.delete(1.0, tk.END)
     tally_text = "\nTally of Votes:\n"
 
@@ -108,17 +110,19 @@ def display_vote_breakdown(final_votes, all_votes, player_data, vacant_count):
     all_people = set(player_data.keys())
     not_voted = all_people - voted_people
 
-    # Track "No Vote" for each party and display in breakdown
-    for name in not_voted:
-        riding, party = player_data[name]
-        line_text = f"({riding})\t{name.capitalize()} [{party}]: No Vote\n"
-        breakdown_box.insert(tk.END, line_text, 'no_vote_bg')  # Highlight no votes
+    # Display people who haven't voted
+    if not_voted:
+        breakdown_box.insert(tk.END, "\n--- People Who Haven't Voted ---\n", 'no_vote_bg')
+        for name in not_voted:
+            if name in player_data:
+                riding, party = player_data[name]
+                breakdown_box.insert(tk.END, f"({riding})\t{name.capitalize()} [{party}]: No Vote\n", 'no_vote_bg')
 
-        # Update party tally for No Vote
-        if party not in party_tally:
-            party_tally[party] = {'Aye': 0, 'Nay': 0, 'Abstain': 0, 'No Vote': 1}
-        else:
-            party_tally[party]['No Vote'] += 1
+            # Track "No Vote" for each party
+            if party not in party_tally:
+                party_tally[party] = {'Aye': 0, 'Nay': 0, 'Abstain': 0, 'No Vote': 1}
+            else:
+                party_tally[party]['No Vote'] += 1
 
     # Final Tally Output
     tally_text += f"Aye: {tally['Aye']}\n"
