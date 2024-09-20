@@ -3,11 +3,6 @@ import re
 import tkinter as tk
 from tkinter import scrolledtext
 
-# Reddit API credentials (replace with your own credentials)
-REDDIT_CLIENT_ID = 'your_client_id'
-REDDIT_SECRET = 'your_secret'
-REDDIT_USER_AGENT = 'vote_analyzer_bot'
-
 # Fixed player data file (adjust the file path accordingly)
 PLAYER_DATA_FILE = 'players.txt'
 
