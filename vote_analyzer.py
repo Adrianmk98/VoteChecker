@@ -70,8 +70,7 @@ def analyze_votes(submission, player_data):
     return final_votes, all_votes
 
 
-# Display vote breakdown in the GUI with line highlighting
-def display_vote_breakdown(final_votes, all_votes, player_data,vacant_count):
+def display_vote_breakdown(final_votes, all_votes, player_data, vacant_count):
     # Clear the text box
     breakdown_box.config(state=tk.NORMAL)  # Enable editing to insert text
     breakdown_box.delete(1.0, tk.END)
@@ -109,15 +108,19 @@ def display_vote_breakdown(final_votes, all_votes, player_data,vacant_count):
     all_people = set(player_data.keys())
     not_voted = all_people - voted_people
 
+    # Track "No Vote" for each party and display in breakdown
     for name in not_voted:
         riding, party = player_data[name]
+        line_text = f"({riding})\t{name.capitalize()} [{party}]: No Vote\n"
+        breakdown_box.insert(tk.END, line_text, 'no_vote_bg')  # Highlight no votes
+
+        # Update party tally for No Vote
         if party not in party_tally:
             party_tally[party] = {'Aye': 0, 'Nay': 0, 'Abstain': 0, 'No Vote': 1}
         else:
             party_tally[party]['No Vote'] += 1
 
     # Final Tally Output
-
     tally_text += f"Aye: {tally['Aye']}\n"
     tally_text += f"Nay: {tally['Nay']}\n"
     tally_text += f"Abstain: {tally['Abstain']}\n"
@@ -134,6 +137,8 @@ def display_vote_breakdown(final_votes, all_votes, player_data,vacant_count):
 
     # Make the breakdown read-only after updating it
     breakdown_box.config(state=tk.DISABLED)
+
+
 
 
 # Function to handle the analyze button click
@@ -181,6 +186,8 @@ tally_box.pack(pady=5)
 breakdown_box.tag_configure('green_bg', background='lightgreen', foreground='black')
 breakdown_box.tag_configure('red_bg', background='lightcoral', foreground='black')
 breakdown_box.tag_configure('yellow_bg', background='lightyellow', foreground='black')
+breakdown_box.tag_configure('no_vote_bg', background='lightgray', foreground='black')  # New tag for no votes
+
 
 # Start the GUI event loop
 root.mainloop()
