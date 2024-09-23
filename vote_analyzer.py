@@ -2,16 +2,20 @@ import praw
 import re
 import tkinter as tk
 from tkinter import scrolledtext
+from playerUpdater import playerUpdater
+import configparser
 
 # Fixed player data file (adjust the file path accordingly)
+playerUpdater()
 PLAYER_DATA_FILE = 'players.txt'
 
-# Initialize Reddit API client
-reddit = praw.Reddit(
-        client_id='X',
-        client_secret='X',
-        user_agent='X'
-    )
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+# Initialize PRAW Reddit instance using the credentials from the file
+reddit = praw.Reddit(client_id=config['reddit']['client_id'],
+                    client_secret=config['reddit']['client_secret'],
+                    user_agent=config['reddit']['user_agent'])
 
 
 def load_player_data(filename):
