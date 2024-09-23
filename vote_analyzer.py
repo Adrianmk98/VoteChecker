@@ -6,7 +6,7 @@ from playerUpdater import playerUpdater
 import configparser
 
 # Fixed player data file (adjust the file path accordingly)
-playerUpdater()
+#playerUpdater() Commented out in order to not need the autoupdater
 PLAYER_DATA_FILE = 'players.txt'
 
 config = configparser.ConfigParser()
