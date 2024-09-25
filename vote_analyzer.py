@@ -5,6 +5,7 @@ from tkinter import scrolledtext
 from playerUpdater import playerUpdater
 import configparser
 import datetime
+import regex as re
 
 # Fixed player data file (adjust the file path accordingly)
 playerUpdater()
@@ -71,9 +72,9 @@ def analyze_votes(submission, player_data, old_players):
     replaced_ridings = set()  # To track ridings where old players have voted
     party_breakdown = {}
 
-    aye_pattern = re.compile(r'\b(aye|oui|yea)\b', re.IGNORECASE)
-    nay_pattern = re.compile(r'\b(nay|non|contre)\b', re.IGNORECASE)
-    abstain_pattern = re.compile(r'\b(abstain|abstention)\b', re.IGNORECASE)
+    aye_pattern = re.compile(r'\b(aye|oui|yea){e<=1}\b', re.IGNORECASE)
+    nay_pattern = re.compile(r'\b(nay|non|contre){e<=1}\b', re.IGNORECASE)
+    abstain_pattern = re.compile(r'\b(abstain|abstention){e<=3}\b', re.IGNORECASE)
 
     current_time = datetime.datetime.utcnow()
     submission.comments.replace_more(limit=None)
